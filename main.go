@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"log/slog"
+	"os"
+
 	api "github.com/divyanshu-parihar/oxidized-scheduler/api"
+	"github.com/divyanshu-parihar/oxidized-scheduler/cmd/wheel"
 	"github.com/divyanshu-parihar/oxidized-scheduler/internal/config"
 	"github.com/divyanshu-parihar/oxidized-scheduler/internal/database"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"log/slog"
-	"os"
 )
 
 func main() {
@@ -39,10 +41,13 @@ func main() {
 
 	slog.Info("Connected to PostgreSQL", "env", cfg.AppEnv)
 
-	a := api.NewAPI(db)
+	api := api.NewAPI(db)
 	slog.Info("Starting the server", "port", cfg.Port)
-	if err := a.CreateServer().Run(":" + cfg.Port); err != nil {
+
+	wheel.NewWheel(api)
+	if err := api.CreateServer().Run(":" + cfg.Port); err != nil {
 		slog.Error("failed to start server", "error", err)
 		os.Exit(1)
 	}
+	slog.Info("Staring the Wheel")
 }

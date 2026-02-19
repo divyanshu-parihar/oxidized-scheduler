@@ -11,12 +11,12 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-func RunMigrations(databaseURL string) error {
+func RunMigrations(databaseURL string, migrationsPath string) error {
 	// Transform postgres:// to pgx5:// for golang-migrate
 	migrationURL := strings.Replace(databaseURL, "postgres://", "pgx5://", 1)
 
 	m, err := migrate.New(
-		"file://migrations",
+		fmt.Sprintf("file://%s", migrationsPath),
 		migrationURL,
 	)
 	if err != nil {

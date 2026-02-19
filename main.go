@@ -16,7 +16,7 @@ func main() {
 	cfg := config.LoadConfig()
 
 	// Run migrations
-	if err := database.RunMigrations(cfg.DatabaseURL); err != nil {
+	if err := database.RunMigrations(cfg.DatabaseURL, "migrations"); err != nil {
 		slog.Error("failed to run migrations", "error", err)
 		os.Exit(1)
 	}
@@ -41,13 +41,18 @@ func main() {
 
 	slog.Info("Connected to PostgreSQL", "env", cfg.AppEnv)
 
-	api := api.NewAPI(db)
-	slog.Info("Starting the server", "port", cfg.Port)
+	// 1. Initialize Wheel (doesn't start yet)
+	tw := wheel.NewWheel("http://localhost:"+cfg.Port)
 
-	wheel.NewWheel(api)
+	// 2. Initialize API with Wheel
+	api := api.NewAPI(db, tw)
+	
+	// 3. Start Wheel
+	tw.Start()
+
+	slog.Info("Starting the server", "port", cfg.Port)
 	if err := api.CreateServer().Run(":" + cfg.Port); err != nil {
 		slog.Error("failed to start server", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Staring the Wheel")
 }

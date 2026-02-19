@@ -17,10 +17,8 @@ func main() {
 	duration := flag.Int("d", 10, "Duration of test in seconds")
 	flag.Parse()
 
-	fmt.Printf("Starting throughput test: %s
-", *url)
-	fmt.Printf("Concurrency: %d, Duration: %ds
-", *concurrency, *duration)
+	fmt.Printf("Starting throughput test: %s\n", *url)
+	fmt.Printf("Concurrency: %d, Duration: %ds\n", *concurrency, *duration)
 
 	payload := map[string]interface{}{
 		"task_type":      "bench_task",
@@ -54,12 +52,12 @@ func main() {
 					resp, err := client.Post(*url, "application/json", bytes.NewBuffer(body))
 					latency := time.Since(reqStart).Microseconds()
 
-					if err != nil || resp.StatusCode >= 400 {
+					if err != nil || (resp != nil && resp.StatusCode >= 400) {
 						atomic.AddInt64(&errorCount, 1)
 						if resp != nil {
 							resp.Body.Close()
 						}
-					} else {
+					} else if resp != nil {
 						atomic.AddInt64(&successCount, 1)
 						atomic.AddInt64(&totalLatency, latency)
 						resp.Body.Close()
@@ -79,18 +77,11 @@ func main() {
 		avgLatency = float64(totalLatency) / float64(successCount) / 1000 // to ms
 	}
 
-	fmt.Println("
---- Results ---")
-	fmt.Printf("Total Requests: %d
-", totalReqs)
-	fmt.Printf("Successful:     %d
-", successCount)
-	fmt.Printf("Errors:         %d
-", errorCount)
-	fmt.Printf("Throughput:     %.2f req/s
-", rps)
-	fmt.Printf("Avg Latency:    %.2f ms
-", avgLatency)
-	fmt.Printf("Total Time:     %.2fs
-", elapsed)
+	fmt.Println("\n--- Results ---")
+	fmt.Printf("Total Requests: %d\n", totalReqs)
+	fmt.Printf("Successful:     %d\n", successCount)
+	fmt.Printf("Errors:         %d\n", errorCount)
+	fmt.Printf("Throughput:     %.2f req/s\n", rps)
+	fmt.Printf("Avg Latency:    %.2f ms\n", avgLatency)
+	fmt.Printf("Total Time:     %.2fs\n", elapsed)
 }

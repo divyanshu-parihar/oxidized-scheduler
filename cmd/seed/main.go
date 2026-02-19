@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/divyanshu-parihar/oxidized-scheduler/internal/config"
@@ -22,52 +23,91 @@ func main() {
 	}
 	defer conn.Close(ctx)
 
-	const totalSets = 50
-	const tasksPerSet = 1000
-	const totalTasks = totalSets * tasksPerSet
+	taskTypes := []struct {
+		Name    string
+		Payload func() map[string]interface{}
+	}{
+		{
+			Name: "webhook_dispatch",
+			Payload: func() map[string]interface{} {
+				return map[string]interface{}{
+					"url": "https://oxhmpwkwbaawptdxtjpm.supabase.co/functions/v1/bright-api",
+					"headers": map[string]string{
+						"Authorization": "Bearer sb_publishable_k8K7gA7PZGGFvnR9NMiC4g_HXOsxLdT",
+						"apikey":        "sb_publishable_k8K7gA7PZGGFvnR9NMiC4g_HXOsxLdT",
+					},
+					"data": map[string]string{"name": "Functions"},
+				}
+			},
+		},
+		{
+			Name: "telegram_message",
+			Payload: func() map[string]interface{} {
+				return map[string]interface{}{
+					"bot_token": "7581789785:AAEYTUviDG4Sqs-lWChmcAbbMgWhDTKwshM",
+					"chat_id":   "6501231451", // Typical format, ensuring it's set for testing
+					"message":   "System Alert: High CPU Usage detected",
+				}
+			},
+		},
+	}
 
-	fmt.Printf("Seeding %d tasks in %d sets of %d (each set sharing a unique second)...\n", totalTasks, totalSets, tasksPerSet)
+	const tasksPerBucket = 10
+	fmt.Printf("Seeding tasks to fill EVERY wheel bucket (Seconds, Minutes, Hours)...\n")
 
 	start := time.Now()
-	baseTime := time.Now().Add(10 * time.Second).Truncate(time.Second) // Start 10s from now
+	rows := [][]interface{}{}
 
-	for s := 0; s < totalSets; s++ {
-		scheduledAt := baseTime.Add(time.Duration(s) * time.Second)
-		rows := [][]interface{}{}
-
-		for t := 0; t < tasksPerSet; t++ {
-			id := uuid.New()
-			taskType := "example_task"
-			status := "pending"
-			payload, _ := json.Marshal(map[string]interface{}{
-				"set": s,
-				"idx": t,
-				"url": "http://localhost:8080/callback",
-			})
-			attempts := 0
-			maxAttempts := 3
-			now := time.Now()
-
+	// 1. Fill Seconds Wheel (next 60 seconds)
+	for s := 0; s < 60; s++ {
+		scheduledAt := time.Now().Add(time.Duration(s) * time.Second)
+		for t := 0; t < tasksPerBucket; t++ {
+			tt := taskTypes[rand.Intn(len(taskTypes))]
 			rows = append(rows, []interface{}{
-				id, taskType, 1, scheduledAt, status, payload, attempts, maxAttempts, now, now,
+				uuid.New(), tt.Name, 1, scheduledAt, "pending", tt.Payload(), 0, 3, time.Now(), time.Now(),
 			})
-		}
-
-		_, err := conn.CopyFrom(
-			ctx,
-			pgx.Identifier{"tasks"},
-			[]string{"id", "task_type", "version", "scheduled_at", "status", "payload", "attempts", "max_attempts", "created_at", "updated_at"},
-			pgx.CopyFromRows(rows),
-		)
-		if err != nil {
-			log.Fatalf("Error during batch insert for set %d: %v", s, err)
-		}
-
-		if (s+1)%10 == 0 {
-			fmt.Printf("Seeded %d sets (%d tasks)...\n", s+1, (s+1)*tasksPerSet)
 		}
 	}
 
-	duration := time.Since(start)
-	fmt.Printf("Successfully seeded %d tasks in %v (avg %.2f tasks/sec)\n", totalTasks, duration, float64(totalTasks)/duration.Seconds())
+	// 2. Fill Minutes Wheel (next 60 minutes)
+	for m := 1; m <= 60; m++ {
+		scheduledAt := time.Now().Add(time.Duration(m) * time.Minute)
+		for t := 0; t < tasksPerBucket; t++ {
+			tt := taskTypes[rand.Intn(len(taskTypes))]
+			rows = append(rows, []interface{}{
+				uuid.New(), tt.Name, 1, scheduledAt, "pending", tt.Payload(), 0, 3, time.Now(), time.Now(),
+			})
+		}
+	}
+
+	// 3. Fill Hours Wheel (next 24 hours)
+	for h := 1; h <= 24; h++ {
+		scheduledAt := time.Now().Add(time.Duration(h) * time.Hour)
+		for t := 0; t < tasksPerBucket; t++ {
+			tt := taskTypes[rand.Intn(len(taskTypes))]
+			rows = append(rows, []interface{}{
+				uuid.New(), tt.Name, 1, scheduledAt, "pending", tt.Payload(), 0, 3, time.Now(), time.Now(),
+			})
+		}
+	}
+
+	// Helper to handle Payload marshalling in the loop above was tricky, refactored here:
+	finalRows := [][]interface{}{}
+	for _, row := range rows {
+		payloadJson, _ := json.Marshal(row[5])
+		row[5] = payloadJson
+		finalRows = append(finalRows, row)
+	}
+
+	_, err = conn.CopyFrom(
+		ctx,
+		pgx.Identifier{"tasks"},
+		[]string{"id", "task_type", "version", "scheduled_at", "status", "payload", "attempts", "max_attempts", "created_at", "updated_at"},
+		pgx.CopyFromRows(finalRows),
+	)
+	if err != nil {
+		log.Fatalf("Error during bulk insert: %v", err)
+	}
+
+	fmt.Printf("Seeded %d tasks across all wheel tiers in %v\n", len(finalRows), time.Since(start))
 }

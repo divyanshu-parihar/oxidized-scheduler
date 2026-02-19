@@ -20,7 +20,7 @@ import (
 func setupTestDB(t *testing.T) *pgxpool.Pool {
 	cfg := config.LoadConfig()
 	// Use the DB URL from config, but ensure migrations are run
-	err := database.RunMigrations(cfg.DatabaseURL)
+	err := database.RunMigrations(cfg.DatabaseURL, "../migrations")
 	if err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestAddEvent(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	api := NewAPI(db)
+	api := NewAPI(db, nil)
 	router := api.CreateServer()
 
 	taskPayload := map[string]interface{}{
@@ -72,7 +72,7 @@ func TestListEvents(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	api := NewAPI(db)
+	api := NewAPI(db, nil)
 	router := api.CreateServer()
 
 	w := httptest.NewRecorder()

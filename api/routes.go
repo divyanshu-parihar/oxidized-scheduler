@@ -17,6 +17,14 @@ func Health(c *gin.Context) {
 	})
 }
 
+func (api *API) GetWheelState(c *gin.Context) {
+	if api.wheel == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Wheel not initialized"})
+		return
+	}
+	c.JSON(http.StatusOK, api.wheel.GetState())
+}
+
 func (api *API) AddEvent(c *gin.Context) {
 	var task models.Task
 
@@ -59,8 +67,40 @@ func (api *API) AddEvent(c *gin.Context) {
 	})
 }
 
+func (api *API) UpdateTaskStatus(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Status   models.TaskStatus `json:"status"`
+		Attempts int               `json:"attempts"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	query := `
+		UPDATE tasks 
+		SET status = $1, attempts = $2, updated_at = NOW(), version = version + 1
+		WHERE id = $3`
+
+	_, err := api.db.Exec(c.Request.Context(), query, req.Status, req.Attempts, id)
+	if err != nil {
+		slog.Error("failed to update task status", "error", err, "id", id)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Task updated"})
+}
+
 func (api *API) ListEvents(c *gin.Context) {
-	query := `SELECT id, task_type, version, scheduled_at, status, payload, attempts, max_attempts, created_at FROM tasks ORDER BY created_at DESC LIMIT 100`
+	// Fetch pending tasks scheduled for the next 24 hours
+	query := `SELECT id, task_type, version, scheduled_at, status, payload, attempts, max_attempts, created_at 
+			  FROM tasks 
+			  WHERE status = 'pending' AND scheduled_at <= NOW() + INTERVAL '24 hours'
+			  ORDER BY scheduled_at ASC 
+			  LIMIT 1000`
 
 	rows, err := api.db.Query(c.Request.Context(), query)
 	if err != nil {

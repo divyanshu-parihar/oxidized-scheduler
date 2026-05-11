@@ -11,22 +11,6 @@ The goal of **Oxidized-Scheduler** is to provide a "Redis-like" ease of use for 
 - **API:** **Gin-powered** REST interface for task submission and monitoring.
 - **Reliability:** At-least-once delivery semantics with idempotent execution support.
 
-## 🛠️ Current Progress
-### Phase 1: Persistence & API (Completed ✅)
-- [x] **Database Schema:** Optimized PostgreSQL schema with composite indexing on `(scheduled_at, status)`.
-- [x] **Configuration:** Environment-based configuration (support for `.env`, `.env.development`, etc.).
-- [x] **Migrations:** Automated migration system with both programmatic and CLI support.
-- [x] **API Endpoints:**
-  - `POST /events`: Schedule a new task/event.
-  - `GET /events`: List recent tasks for observability.
-  - `GET /health`: System health check.
-- [x] **Tooling:** Development seed scripts for rapid testing.
-
-### Phase 2: Timing Wheels & Core Engine (Current 🚧)
-- [ ] In-memory Timing Wheel implementation.
-- [ ] Sharded Database "Bucketing" for parallel task loading.
-- [ ] Dispatcher-Executor decoupling.
-
 ## 🚦 Getting Started
 
 ### Prerequisites
